@@ -158,7 +158,8 @@ async def get_menus(manager_id: int = Depends(get_current_user)):
         # Assume the table structure and logic is correct
         cursor.execute(
             """
-            SELECT * FROM menu_table 
+            SELECT DISTINCT category
+            FROM menu_table 
             WHERE restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
