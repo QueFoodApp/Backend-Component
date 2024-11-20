@@ -10,6 +10,7 @@ from .auth import create_access_token, verify_token  # Import JWT functions from
 from utils.db_authenticate import get_db
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
+from fastapi import Query
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -158,7 +159,8 @@ async def get_menus(manager_id: int = Depends(get_current_user)):
         # Assume the table structure and logic is correct
         cursor.execute(
             """
-            SELECT * FROM menu_table 
+            SELECT DISTINCT category
+            FROM menu_table 
             WHERE restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
@@ -175,6 +177,53 @@ async def get_menus(manager_id: int = Depends(get_current_user)):
         connection.close()
 
         return df.to_dict(orient="records")
+    except Exception as error:
+        logger.error("Error fetching menus: %s", error)
+        raise HTTPException(status_code=500, detail="Failed to fetch menus.")
+    
+    
+    
+@router.get("/menus/food")
+async def get_menus(
+    manager_id: int = Depends(get_current_user), 
+    category: str = Query(..., description="The category of food items to fetch")
+):
+    print("get_menus called with category:", category)
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        # Adjust SQL query to fetch food items by category
+        print(category)
+        cursor.execute(
+            """
+            SELECT food_name, food_price
+            FROM menu_table
+            WHERE restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            ) AND category = %s
+            """,
+            (manager_id, category)
+        )
+
+        # Fetch and format results
+        records = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(records, columns=column_names)
+        
+        cursor.close()
+        connection.close()
+
+        return df.to_dict(orient="records")  # Return as list of dictionaries
     except Exception as error:
         logger.error("Error fetching menus: %s", error)
         raise HTTPException(status_code=500, detail="Failed to fetch menus.")
