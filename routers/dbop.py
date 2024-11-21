@@ -241,7 +241,7 @@ async def get_order(manager_id: int = Depends(get_current_user)):
 
         cursor.execute(
             """
-            SELECT fooditems FROM order_table
+            SELECT * FROM order_table
             WHERE restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
