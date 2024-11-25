@@ -241,13 +241,22 @@ async def get_order(manager_id: int = Depends(get_current_user)):
 
         cursor.execute(
             """
-            SELECT * FROM order_table
-            WHERE restaurant_id IN (
+            SELECT 
+                ot.*,
+                json_agg(json_build_object(
+                    'food_name', elem ->> 'food_name',
+                    'food_price', elem ->> 'food_price'
+                )) AS fooditems
+            FROM order_table ot
+            LEFT JOIN LATERAL jsonb_array_elements(ot.fooditems) AS elem ON true
+            WHERE ot.restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
-                WHERE manager_id = %s 
-            ) 
-            AND status IN ('new', 'prepare');
+                WHERE manager_id = %s
+            )
+            AND ot.status IN ('new', 'prepare')
+            GROUP BY ot.order_number
+            ORDER BY ot.order_number;
             """,
             (manager_id,)
         )
