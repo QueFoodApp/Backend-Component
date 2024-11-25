@@ -245,8 +245,9 @@ async def get_order(manager_id: int = Depends(get_current_user)):
             WHERE restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
-                WHERE manager_id = %s
+                WHERE manager_id = %s 
             ) 
+            AND status IN ('new', 'prepare');
             """,
             (manager_id,)
         )
