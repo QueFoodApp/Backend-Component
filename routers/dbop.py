@@ -33,6 +33,16 @@ class Login(BaseModel):
     username: str
     password: str
 
+class UpdateMenuAvailability(BaseModel):
+    category: str  # Category of food items
+    food_name: str  # Food name for validation
+    availability: str  # Availability as a string
+    
+class UpdateMenuByCategory(BaseModel):
+    category: str  # Category of food items
+    availability: str  # Availability as a string
+
+    
 
 # OAuth2 dependency
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # Adjust if needed
@@ -201,7 +211,7 @@ async def get_menus(
 
         cursor.execute(
             """
-            SELECT food_name, food_price
+            SELECT food_name, food_price, availability
             FROM menu_table
             WHERE restaurant_id IN (
                 SELECT restaurant_id 
@@ -241,12 +251,22 @@ async def get_order(manager_id: int = Depends(get_current_user)):
 
         cursor.execute(
             """
-            SELECT fooditems FROM order_table
-            WHERE restaurant_id IN (
+            SELECT 
+                ot.*,
+                json_agg(json_build_object(
+                    'food_name', elem ->> 'food_name',
+                    'food_price', elem ->> 'food_price'
+                )) AS fooditems
+            FROM order_table ot
+            LEFT JOIN LATERAL jsonb_array_elements(ot.fooditems) AS elem ON true
+            WHERE ot.restaurant_id IN (
                 SELECT restaurant_id 
                 FROM manager_account_table 
                 WHERE manager_id = %s
-            ) 
+            )
+            AND ot.status IN ('new', 'prepare')
+            GROUP BY ot.order_number
+            ORDER BY ot.order_number;
             """,
             (manager_id,)
         )
@@ -263,3 +283,102 @@ async def get_order(manager_id: int = Depends(get_current_user)):
     except Exception as error:
         logger.error("Error fetching menus: %s", error)
         raise HTTPException(status_code=500, detail="Failed to fetch menus.")
+    
+
+# PUT endpoint to update menu availability
+@router.put("/menus/availability")
+async def update_menu_availability(item: UpdateMenuAvailability, manager_id: int = Depends(get_current_user)):
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        # Combined SQL query to update availability based on category and check food name
+        cursor.execute(
+            """
+            UPDATE menu_table
+            SET availability = %s
+            WHERE category = %s AND restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            )
+            AND food_name = %s
+            RETURNING food_name
+            """,
+            (item.availability, item.category, manager_id, item.food_name)  # Updated to include category and food_name
+        )
+        
+        result = cursor.fetchone()
+
+        if result is None:
+            raise HTTPException(status_code=404, detail="No food items found for this category or you do not have permission to modify them.")
+
+        actual_food_name = result[0]
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return {
+            "message": "Menu availability updated successfully!", 
+            "food_name": actual_food_name, 
+            "new_availability": item.availability
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update menu availability: {str(e)}")
+    
+    
+    
+@router.put("/menus/update-availability")  # Updated endpoint path
+async def update_menu_by_category(item: UpdateMenuByCategory, manager_id: int = Depends(get_current_user)):
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        # SQL query to update availability for all items in the specified category
+        cursor.execute(
+            """
+            UPDATE menu_table
+            SET availability = %s
+            WHERE category = %s AND restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            )
+            RETURNING food_name
+            """,
+            (item.availability, item.category, manager_id)  # Use the new parameters
+        )
+        
+        results = cursor.fetchall()  # Fetch all updated food names
+
+        if not results:
+            raise HTTPException(status_code=404, detail="No food items found for this category or you do not have permission to modify them.")
+        
+        food_names = [result[0] for result in results]  # Extract food names
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return {
+            "message": "Menu availability updated successfully!", 
+            "updated_food_names": food_names,  # Return all modified food names
+            "new_availability": item.availability
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update menu availability: {str(e)}")
