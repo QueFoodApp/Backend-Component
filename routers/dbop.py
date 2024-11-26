@@ -41,6 +41,10 @@ class UpdateMenuAvailability(BaseModel):
 class UpdateMenuByCategory(BaseModel):
     category: str  # Category of food items
     availability: str  # Availability as a string
+    
+class UpdateOrderStatus(BaseModel):
+    order_number: str
+    status: str
 
     
 
@@ -382,3 +386,46 @@ async def update_menu_by_category(item: UpdateMenuByCategory, manager_id: int = 
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update menu availability: {str(e)}")
+    
+
+
+@router.put("/order/update-status")
+async def update_order_status(order: UpdateOrderStatus, manager_id: int = Depends(get_current_user)):
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        # SQL query to update order status based on order_number
+        cursor.execute(
+            """
+            UPDATE public.order_table
+            SET status = %s
+            WHERE order_number = %s
+            RETURNING order_number, status
+            """,
+            (order.status, order.order_number)
+        )
+        
+        updated_order = cursor.fetchone()
+
+        if updated_order is None:
+            raise HTTPException(status_code=404, detail="Order not found or status could not be updated.")
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return {
+            "message": "Order status updated successfully!",
+            "order_number": updated_order[0],
+            "new_status": updated_order[1]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to update order status: {str(e)}")
