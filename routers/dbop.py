@@ -288,6 +288,58 @@ async def get_order(manager_id: int = Depends(get_current_user)):
         logger.error("Error fetching menus: %s", error)
         raise HTTPException(status_code=500, detail="Failed to fetch menus.")
     
+    
+@router.get("/history")
+async def get_order(manager_id: int = Depends(get_current_user)):
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT 
+                ot.*,
+                json_agg(json_build_object(
+                    'food_name', elem ->> 'food_name',
+                    'food_price', elem ->> 'food_price'
+                )) AS fooditems
+            FROM order_table ot
+            LEFT JOIN LATERAL jsonb_array_elements(ot.fooditems) AS elem ON true
+            WHERE ot.restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            )
+            AND ot.status IN ('complete', 'cancelled')
+            GROUP BY ot.order_number
+            ORDER BY ot.order_number;
+            """,
+            (manager_id,)
+        )
+
+        # Fetch and format results
+        records = cursor.fetchall()
+        column_names = [desc[0] for desc in cursor.description]
+        df = pd.DataFrame(records, columns=column_names)
+        
+        cursor.close()
+        connection.close()
+
+        return df.to_dict(orient="records")  # Return as list of dictionaries
+    except Exception as error:
+        logger.error("Error fetching menus: %s", error)
+        raise HTTPException(status_code=500, detail="Failed to fetch menus.")
+    
+    
+    
+    
 
 # PUT endpoint to update menu availability
 @router.put("/menus/availability")
