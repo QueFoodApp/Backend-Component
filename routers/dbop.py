@@ -390,8 +390,6 @@ async def update_menu_availability(item: UpdateMenuAvailability, manager_id: int
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update menu availability: {str(e)}")
     
-    
-    
 @router.put("/menus/update-availability")  # Updated endpoint path
 async def update_menu_by_category(item: UpdateMenuByCategory, manager_id: int = Depends(get_current_user)):
     try:
@@ -439,8 +437,6 @@ async def update_menu_by_category(item: UpdateMenuByCategory, manager_id: int = 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update menu availability: {str(e)}")
     
-
-
 @router.put("/order/update-status")
 async def update_order_status(order: UpdateOrderStatus, manager_id: int = Depends(get_current_user)):
     try:
