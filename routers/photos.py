@@ -5,6 +5,7 @@ import psycopg2
 import os
 import logging
 from .auth import verify_token  # Ensure this is the correct path
+import base64
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -74,4 +75,50 @@ async def upload_photo(
         # Log the error and return an HTTPException
         logger.error(f"Error uploading photo: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
-    
+
+
+# GET endpoint to retrieve a photo's metadata
+@router.get("/restaurant/photo/{photo_id}")
+async def get_photo(photo_id: int, manager_id: int = Depends(get_current_user)):
+    try:
+        # Connect to the database
+        connection = psycopg2.connect(
+            host="34.123.21.31",
+            database="quefoodhall",
+            user="developuser",
+            password="]&l381[czY:F@sV*",
+            port=5432,
+        )
+        cursor = connection.cursor()
+
+        # Fetch the photo record
+        cursor.execute(
+            """
+            SELECT photo_id, restaurant_id, description, file_name, content_type, photo_data
+            FROM restaurant_photos
+            WHERE photo_id = %s
+            """,
+            (photo_id,)
+        )
+        record = cursor.fetchone()
+
+        # Handle the case where the record is not found
+        if not record:
+            raise HTTPException(status_code=404, detail="Photo not found")
+
+        # Define column names
+        column_names = ["photo_id", "restaurant_id", "description", "file_name", "content_type", "photo_data"]
+
+        # Convert to a dictionary
+        result = dict(zip(column_names, record))
+
+        # Encode photo_data to base64
+        if result["photo_data"]:
+            result["photo_data"] = base64.b64encode(result["photo_data"]).decode("utf-8")
+
+        cursor.close()
+        connection.close()
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch photo: {str(e)}")
