@@ -122,3 +122,59 @@ async def get_photo(photo_id: int, manager_id: int = Depends(get_current_user)):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch photo: {str(e)}")
+
+@router.delete("/restaurant/photo/{photo_id}")
+async def delete_photo(
+    photo_id: int, 
+    manager_id: int = Depends(get_current_user)  # Validate manager
+):
+    """
+    DELETE endpoint for removing a photo record by photo_id.
+    """
+    try:
+        # Log the request
+        logger.debug(f"Manager ID: {manager_id}, Photo ID to delete: {photo_id}")
+
+        # Connect to the PostgreSQL database
+        connection = psycopg2.connect(
+            host="34.123.21.31",
+            database="quefoodhall",
+            user="developuser",
+            password="]&l381[czY:F@sV*",
+            port=5432,
+        )
+        cursor = connection.cursor()
+
+        # Attempt to delete the photo
+        cursor.execute(
+            """
+            DELETE FROM restaurant_photos
+            WHERE photo_id = %s
+            """,
+            (photo_id,)
+        )
+
+        # Check if any row was affected (i.e., if the photo existed)
+        if cursor.rowcount == 0:
+            logger.warning(f"No photo found with ID {photo_id}.")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Photo with ID {photo_id} not found."
+            )
+
+        # Commit the deletion
+        connection.commit()
+
+        # Log success and close the connection
+        logger.info(f"Photo with ID {photo_id} deleted successfully.")
+        cursor.close()
+        connection.close()
+
+        return {"message": f"Photo with ID {photo_id} has been deleted successfully."}
+    except HTTPException as http_exc:
+        # Re-raise known HTTPExceptions
+        raise http_exc
+    except Exception as e:
+        # Log any other errors and return a generic 500
+        logger.error(f"Error deleting photo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete photo: {str(e)}")
