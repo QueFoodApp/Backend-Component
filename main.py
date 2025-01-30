@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import test, dbop
+from routers import test, dbop, photos
+
 
 
 app = FastAPI()
@@ -17,6 +18,8 @@ app.add_middleware(
 app.include_router(test.router, prefix="/api")
 # routers/test -> /api/dbop
 app.include_router(dbop.router, prefix="/api")
+
+app.include_router(photos.router, prefix="/api")
 
 
 @app.get("/")
