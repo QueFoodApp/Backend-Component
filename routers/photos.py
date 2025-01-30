@@ -31,19 +31,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 # Endpoint for uploading photos
 @router.post("/restaurant/upload-photo")
 async def upload_photo(
-    restaurant_id: int = Form(...),  # Restaurant ID
-    description: str = Form(None),  # Optional description
-    file: UploadFile = File(...),   # File upload
-    manager_id: int = Depends(get_current_user)  # Validate manager
+    restaurant_id: int = Form(...),
+    food_name: str = Form(...),  # Added food_name to ensure unique records
+    description: str = Form(None),
+    file: UploadFile = File(...),
+    manager_id: int = Depends(get_current_user)
 ):
     try:
-        # Log input details
         logger.debug(f"Manager ID: {manager_id}, Restaurant ID: {restaurant_id}, File: {file.filename}")
 
-        # Read file content
         file_content = await file.read()
 
-        # Connect to the PostgreSQL database
         connection = psycopg2.connect(
             host="34.123.21.31",
             database="quefoodhall",
@@ -51,28 +49,48 @@ async def upload_photo(
             password="]&l381[czY:F@sV*",
             port=5432,
         )
-
         cursor = connection.cursor()
 
-        # Insert photo details into the database
+        # Check if the photo already exists
         cursor.execute(
             """
-            INSERT INTO restaurant_photos (restaurant_id, description, photo_data, file_name, content_type)
-            VALUES (%s, %s, %s, %s, %s)
+            SELECT photo_id FROM restaurant_photos WHERE restaurant_id = %s AND food_name = %s;
             """,
-            (restaurant_id, description, file_content, file.filename, file.content_type)
+            (restaurant_id, food_name)
         )
+        existing_photo = cursor.fetchone()
+
+        if existing_photo:
+            # If photo exists, update it
+            cursor.execute(
+                """
+                UPDATE restaurant_photos
+                SET description = %s, photo_data = %s, file_name = %s, content_type = %s
+                WHERE restaurant_id = %s AND food_name = %s;
+                """,
+                (description, file_content, file.filename, file.content_type, restaurant_id, food_name)
+            )
+            logger.info(f"Updated photo for {food_name} in restaurant {restaurant_id}")
+            message = "Photo updated successfully!"
+        else:
+            # If no photo exists, insert a new one
+            cursor.execute(
+                """
+                INSERT INTO restaurant_photos (restaurant_id, food_name, description, photo_data, file_name, content_type)
+                VALUES (%s, %s, %s, %s, %s, %s);
+                """,
+                (restaurant_id, food_name, description, file_content, file.filename, file.content_type)
+            )
+            logger.info(f"Inserted new photo for {food_name} in restaurant {restaurant_id}")
+            message = "Photo uploaded successfully!"
 
         connection.commit()
-
-        # Log success and close the connection
-        logger.info(f"Photo uploaded successfully for Restaurant ID {restaurant_id}")
         cursor.close()
         connection.close()
 
-        return {"message": "Photo uploaded successfully!"}
+        return {"message": message}
+
     except Exception as e:
-        # Log the error and return an HTTPException
         logger.error(f"Error uploading photo: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to upload photo: {str(e)}")
 
@@ -105,6 +123,55 @@ async def get_photo(photo_id: int, manager_id: int = Depends(get_current_user)):
         # Handle the case where the record is not found
         if not record:
             raise HTTPException(status_code=404, detail="Photo not found")
+
+        # Define column names
+        column_names = ["photo_id", "restaurant_id", "description", "file_name", "content_type", "photo_data"]
+
+        # Convert to a dictionary
+        result = dict(zip(column_names, record))
+
+        # Encode photo_data to base64
+        if result["photo_data"]:
+            result["photo_data"] = base64.b64encode(result["photo_data"]).decode("utf-8")
+
+        cursor.close()
+        connection.close()
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch photo: {str(e)}")
+    
+@router.get("/restaurant/photo")
+async def get_photo(food_name: str, manager_id: int = Depends(get_current_user)):
+    """
+    Fetch a photo record based on food_name and restaurant_id (from manager_id).
+    """
+    try:
+        # Connect to the database
+        connection = psycopg2.connect(
+            host="34.123.21.31",
+            database="quefoodhall",
+            user="developuser",
+            password="]&l381[czY:F@sV*",
+            port=5432,
+        )
+        cursor = connection.cursor()
+
+        # Fetch the photo record based on restaurant_id and food_name
+        cursor.execute(
+            """
+            SELECT photo_id, restaurant_id, description, file_name, content_type, photo_data
+            FROM restaurant_photos
+            WHERE restaurant_id = %s
+              AND food_name = %s;
+            """,
+            (manager_id, food_name)
+        )
+        record = cursor.fetchone()
+
+        # Handle the case where the record is not found
+        if not record:
+            return {"message": "No photo found for this dish."}
 
         # Define column names
         column_names = ["photo_id", "restaurant_id", "description", "file_name", "content_type", "photo_data"]

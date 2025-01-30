@@ -477,3 +477,110 @@ async def update_order_status(order: UpdateOrderStatus, manager_id: int = Depend
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to update order status: {str(e)}")
+    
+    
+@router.get("/restaurant")
+async def get_restaurant_by_manager(manager_id: int = Depends(get_current_user)):
+    """
+    Fetch restaurant details based on the manager ID.
+
+    Args:
+        manager_id (int): The manager ID obtained from the JWT token.
+
+    Returns:
+        dict: Restaurant details including restaurant_id, name, ratings, type, and pricing levels.
+    """
+    try:
+        # Establish database connection
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+
+        # Updated SQL query to fetch required restaurant details
+        cursor.execute(
+            """
+            SELECT 
+                restaurant_id, 
+                restaurant_name, 
+                ratings, 
+                restaurant_type, 
+                pricing_levels
+            FROM public.restaurant_table
+            WHERE restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            )
+            """,
+            (manager_id,)
+        )
+
+        # Fetch restaurant details
+        record = cursor.fetchone()
+
+        if not record:
+            raise HTTPException(
+                status_code=404, 
+                detail="No restaurant found for the provided manager ID."
+            )
+
+        # Map the record to a dictionary
+        column_names = [desc[0] for desc in cursor.description]
+        restaurant_details = dict(zip(column_names, record))
+
+        cursor.close()
+        connection.close()
+
+        return restaurant_details
+
+    except Exception as error:
+        logger.error("Error fetching restaurant details: %s", error)
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to fetch restaurant details."
+        )
+
+
+@router.get("/foodnames")
+async def get_food_names(manager_id: int = Depends(get_current_user)):
+    try:
+        connection = psycopg2.connect(
+            host=os.getenv("HOST"),
+            database=os.getenv("DATABASE"),
+            user="developuser",
+            password=os.getenv("PASSWORD"),
+            port=os.getenv("PORT"),
+        )
+        cursor = connection.cursor()
+        cursor.execute(
+            """
+            SELECT food_name
+            FROM menu_table
+            WHERE restaurant_id IN (
+                SELECT restaurant_id 
+                FROM manager_account_table 
+                WHERE manager_id = %s
+            )
+            """,
+            (manager_id,)
+        )
+
+        # Fetch all food names
+        records = cursor.fetchall()
+        food_names = [record[0] for record in records]
+
+        cursor.close()
+        connection.close()
+
+        return {"food_names": food_names}
+    except Exception as error:
+        logger.error("Error fetching food names: %s", error)
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to fetch food names."
+        )
