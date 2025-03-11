@@ -259,7 +259,7 @@ async def get_order(manager_id: int = Depends(get_current_user)):
                 ot.*,
                 json_agg(json_build_object(
                     'food_name', elem ->> 'food_name',
-                    'food_price', elem ->> 'food_price'
+                    'unit_price', (elem ->> 'unit_price')::numeric
                 )) AS fooditems
             FROM order_table ot
             LEFT JOIN LATERAL jsonb_array_elements(ot.fooditems) AS elem ON true
@@ -308,7 +308,7 @@ async def get_order(manager_id: int = Depends(get_current_user)):
                 ot.*,
                 json_agg(json_build_object(
                     'food_name', elem ->> 'food_name',
-                    'food_price', elem ->> 'food_price'
+                    'unit_price', (elem ->> 'unit_price')::numeric
                 )) AS fooditems
             FROM order_table ot
             LEFT JOIN LATERAL jsonb_array_elements(ot.fooditems) AS elem ON true
