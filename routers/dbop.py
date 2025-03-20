@@ -5,8 +5,8 @@ import logging
 import os
 import psycopg2
 from dotenv import load_dotenv
-import hashlib  # For password hashing
-from .auth import create_access_token, verify_token  # Import JWT functions from auth.py
+import hashlib 
+from .auth import create_access_token, verify_token 
 from utils.db_authenticate import get_db
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
@@ -34,13 +34,13 @@ class Login(BaseModel):
     password: str
 
 class UpdateMenuAvailability(BaseModel):
-    category: str  # Category of food items
-    food_name: str  # Food name for validation
-    availability: str  # Availability as a string
+    category: str  
+    food_name: str 
+    availability: str  
     
 class UpdateMenuByCategory(BaseModel):
-    category: str  # Category of food items
-    availability: str  # Availability as a string
+    category: str  
+    availability: str  
     
 class UpdateOrderStatus(BaseModel):
     order_number: str
@@ -49,7 +49,7 @@ class UpdateOrderStatus(BaseModel):
     
 
 # OAuth2 dependency
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")  # Adjust if needed
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 # Get current user
 def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -62,7 +62,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 # Function to hash passwords using SHA-256
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()  # Hash the password using SHA-256
+    return hashlib.sha256(password.encode('utf-8')).hexdigest() 
 
 # Registration endpoint
 @router.post("/register")
@@ -83,7 +83,7 @@ async def register(user: User):
         # Insert new user securely
         cursor.execute(
             "INSERT INTO manager_account_table (manager_account_name, manager_account_password, restaurant_id, manager_id) VALUES (%s, %s, %s, %s)",
-            (user.username, hashed_password, user.restaurant_id, user.manager_id)  # Include new fields
+            (user.username, hashed_password, user.restaurant_id, user.manager_id) 
         )
         connection.commit()
 
@@ -96,7 +96,7 @@ async def register(user: User):
 
 # Login endpoint
 @router.post("/login")
-async def login(user: Login):  # Use the new Login model
+async def login(user: Login): 
     try:
         connection = psycopg2.connect(
             host=os.getenv("HOST"),
@@ -114,8 +114,8 @@ async def login(user: Login):  # Use the new Login model
         )
         result = cursor.fetchone()
 
-        if result and result[0] == user.password:  # Compare hashed passwords
-            access_token = create_access_token(data={"sub": user.username, "manager_id": result[1]})  # Create JWT token
+        if result and result[0] == user.password: 
+            access_token = create_access_token(data={"sub": user.username, "manager_id": result[1]}) 
             return {"access_token": access_token, "token_type": "bearer"}
         else:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -135,7 +135,7 @@ async def test_route():
 @router.get("/dbop/get_selected_results")
 async def get_selected_results(query: str, cursor=Depends(get_db)):
     try:
-        # Ensure the query is a SELECT statement
+        
         if not query.strip().lower().startswith("select"):
             raise ValueError("Only SELECT queries are allowed.")
 
@@ -186,7 +186,7 @@ async def get_menus(manager_id: int = Depends(get_current_user)):
         records = cursor.fetchall()
         column_names = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(records, columns=column_names)
-        # print(df.to_dict(orient="records"))
+
         cursor.close()
         connection.close()
 
@@ -283,7 +283,7 @@ async def get_order(manager_id: int = Depends(get_current_user)):
         cursor.close()
         connection.close()
 
-        return df.to_dict(orient="records")  # Return as list of dictionaries
+        return df.to_dict(orient="records") 
     except Exception as error:
         logger.error("Error fetching menus: %s", error)
         raise HTTPException(status_code=500, detail="Failed to fetch menus.")
@@ -423,7 +423,7 @@ async def update_menu_by_category(item: UpdateMenuByCategory, manager_id: int = 
         if not results:
             raise HTTPException(status_code=404, detail="No food items found for this category or you do not have permission to modify them.")
         
-        food_names = [result[0] for result in results]  # Extract food names
+        food_names = [result[0] for result in results] 
         
         connection.commit()
         cursor.close()
